@@ -11,7 +11,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torchvision.transforms.functional as TF
 import math
 import cv2
-from processing.preprocessing import GeoTrans, decom_pano_name, decom_pano_name_vigor, statistic_data_pixel
+from processing.preprocessing import GeoTrans, decom_pano_name, statistic_data_pixel
 from torchvision import transforms
 
 import pandas as pd
@@ -124,8 +124,7 @@ class SkyMap_Loader():
             grd_datas = f.readlines()
         return grd_datas
 
-# 加载skymap数据，在原有的基础上修改，误差已生成
-# 角度误差已添加在全景影像的slice中，偏移误差从train.txt中获取
+# For slice-level training
 class SkyMapDataset(Dataset):
     def __init__(self, root, pro_dir,
                  transform=None, rotation_range=10, sat_resize=512, cross_area=True, train=True, city_list=None):
@@ -306,185 +305,6 @@ class SkyMapDataset(Dataset):
             return sat_map, grd_left_imgs[0], gt, city
 
 
-# 使用相机的拍摄位置作为slice定位的真值
-class SkyMapDataset_cemera(Dataset):
-    def __init__(self, root, pro_dir,
-                 transform=None, rotation_range=10, sat_resize=512, cross_area=True, train=True, city_list=None):
-        self.root = root
-        self.pro_root = pro_dir
-        self.train = train
-
-        self.shift_range_pixel = 160 # in terms of pixels
-        self.rotation_range = rotation_range  # in terms of degree
-
-        self.SatMap_process_sidelength = 640 # 添加误差后中心裁切的图像的大小
-        self.skip_in_seq = 2  # skip 2 in sequence: 6,3,1~
-        if transform != None:
-            self.satmap_transform = transform[0]
-            self.grdimage_transform = transform[1]
-
-        self.slice_flag = 'slice'
-        self.sat_dir = 'sat_img'
-
-        self.meter_per_pixel_dict = {}
-        self.grd_datas = [] # path, o_rand, x_rand, y_rand, x_gt, y_gt
-        skymap_loder = SkyMap_Loader(pro_dir, self.train, cross_area, True)
-        if city_list is not None:
-            self.city_list = city_list
-        else:
-            self.city_list = skymap_loder.get_citys()
-        print('load citys:', self.city_list)
-        for city in self.city_list:
-            grd_datas = skymap_loder.run(city)
-            self.grd_datas.extend([osp.join(city, self.slice_flag, data[:-1]) for data in grd_datas])
-            self.meter_per_pixel_dict[city] = compute_meters_per_pixel(
-                osp.join(self.root, city, self.sat_dir),
-                self.SatMap_process_sidelength,
-                sat_resize
-            )
-
-
-    def __len__(self):
-        return len(self.grd_datas)
-
-    def get_file_list(self):
-        return self.grd_data
-
-    def __getitem__(self, idx):
-        # 根据编号读取数据并返回监督所需的真值
-        # 先添加误差再进行定位数据的初始方向对齐
-        grd_data = self.grd_datas[idx]
-        parts = grd_data.split()
-        i_path, o_rand, x_rand, y_rand, x_gt, y_gt = parts
-        # o_rand: 即在切片时，顺时针方向偏离一定的度数
-        o_rand, x_rand, y_rand = float(o_rand), float(x_rand), float(y_rand)
-
-        grd_path = osp.join(self.pro_root, i_path)
-        temp = i_path.split('/')
-        city, _, flag, i_name = temp
-        sat_path = osp.join(self.root, city, self.sat_dir, flag, 'satellite.jpg')
-
-        ox, oy = float(x_gt), float(y_gt)
-        heading = float(osp.splitext(i_name)[0]) * 360 / 12
-        heading += 90 # 转变为与正东方向顺时针夹角值
-        if heading > 360:
-            heading -= 360
-
-        # =================== read satellite map ===================================
-        with PIL.Image.open(sat_path, 'r') as SatMap:
-            sat_map = SatMap.convert('RGB')
-        cx, cy = SatMap.width/2, SatMap.height/2
-        ox, oy = cx, cy
-
-        # sat0 = np.array(sat_map)
-        # sat0 = cv2.circle(sat0, center=(int(ox), int(oy)), radius=3, thickness=1,
-        #                      color=(0, 0, 255))
-        # sat0 = cv2.circle(sat0, center=(int(cx), int(cy)), radius=3, thickness=1,
-        #                      color=(255, 0, 0))
-
-        # randomly generate shift
-        shift_range = self.shift_range_pixel
-        gt_shift_x = x_rand * shift_range
-        gt_shift_y = y_rand * shift_range
-
-        sat_rand_shift = \
-            sat_map.transform(
-                sat_map.size, PIL.Image.AFFINE,
-                (1, 0, -gt_shift_x,
-                 0, 1, -gt_shift_y),
-                resample=PIL.Image.BILINEAR)
-        # randomly generate roation
-        random_ori = o_rand * self.rotation_range  # 0 means the arrow in aerial image heading Easting, counter-clockwise increasing
-
-        ox += gt_shift_x
-        oy += gt_shift_y
-        # sat2 = np.array(sat_rand_shift)
-        # sat2 = cv2.circle(sat2, center=(int(ox), int(oy)), radius=3, thickness=1,
-        #                      color=(0, 0, 255))
-        cx += gt_shift_x
-        cy += gt_shift_y
-        # sat2 = cv2.circle(sat2, center=(int(cx), int(cy)), radius=3, thickness=1,
-        #                      color=(255, 0, 0))
-
-        # =================== initialize some required variables ============================
-        grd_left_imgs = torch.tensor([])
-        with PIL.Image.open(grd_path, 'r') as GrdImg:
-            grd_img_left = GrdImg.convert('RGB')
-            grd_test = np.array(grd_img_left)
-            if self.grdimage_transform is not None:
-                grd_img_left = self.grdimage_transform(grd_img_left)
-
-        grd_left_imgs = torch.cat([grd_left_imgs, grd_img_left.unsqueeze(0)], dim=0)
-
-        sat_align_cam = sat_rand_shift.rotate(heading)  # make the east direction the vehicle heading
-        sat3 = np.array(sat_align_cam)
-        ox, oy = rotate_point(ox, oy, SatMap.width/2, SatMap.height/2, heading)
-        cx, cy = rotate_point(cx, cy, SatMap.width/2, SatMap.height/2, heading)
-
-        sat3 = cv2.circle(sat3, center=(int(ox), int(oy)), radius=3, thickness=1,
-                             color=(0, 0, 255))
-        sat3 = cv2.circle(sat3, center=(int(cx), int(cy)), radius=3, thickness=1,
-                             color=(255, 0, 0))
-        dx = ox - SatMap.width/2
-        dy = oy - SatMap.height/2
-        sat_map = TF.center_crop(sat_align_cam, self.SatMap_process_sidelength)
-
-        sat4 = np.array(sat_map.resize((512, 512)))
-
-        # transform
-        if self.satmap_transform is not None:
-            sat_map = self.satmap_transform(sat_map)
-
-        # gt heat map
-        x_offset = int(-dx * sat_map.shape[1]/self.SatMap_process_sidelength)
-        y_offset = int(-dy * sat_map.shape[1] / self.SatMap_process_sidelength)
-
-        x, y = np.meshgrid(np.linspace(-256 + x_offset, 256 + x_offset, 512),
-                           np.linspace(-256 + y_offset, 256 + y_offset, 512))
-        d = np.sqrt(x * x + y * y)
-        sigma, mu = 4, 0.0
-        gt = np.zeros([1, 512, 512], dtype=np.float32)
-        gt[0, :, :] = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2)))
-        gt = torch.tensor(gt)  # 生成二维高斯分布，以车辆所在位置为中心
-
-        # orientation gt
-        orientation_angle = 90 + random_ori
-        if orientation_angle < 0:
-            orientation_angle = orientation_angle + 360
-        elif orientation_angle > 360:
-            orientation_angle = orientation_angle - 360
-
-        gt_with_ori = np.zeros([16, 512, 512], dtype=np.float32)
-        index = int(orientation_angle // 22.5)
-        ratio = (orientation_angle % 22.5) / 22.5
-        if index == 0:
-            gt_with_ori[0, :, :] = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2))) * (1 - ratio)
-            gt_with_ori[15, :, :] = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2))) * ratio
-        else:
-            gt_with_ori[16 - index, :, :] = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2))) * (1 - ratio)
-            gt_with_ori[16 - index - 1, :, :] = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2))) * ratio
-        gt_with_ori = torch.tensor(gt_with_ori)
-
-        orientation_map = torch.full([2, 512, 512], np.cos(orientation_angle * np.pi / 180))
-        orientation_map[1, :, :] = np.sin(orientation_angle * np.pi / 180)
-
-
-        # gt0 = gt.numpy().squeeze()
-        # gty, gtx = np.unravel_index(gt0.argmax(), gt0.shape)
-        # sat4 = cv2.circle(sat4, center=(int(gtx), int(gty)), radius=3, thickness=1,
-        #                      color=(0, 0, 255))
-
-        # 返回值，主要返回heatmap: 位移与旋转角
-        # gt: 位移在sat_map各像素处旋转角度的真值
-        # gt_with_ori: 在sat_map各像素处旋转角度的真值
-        # orientation_map： 旋转角的cos与sin值
-        # orientation_angle：旋转角真值，度, 认为地面初始都是朝北看，旋转该角度后即可与卫星重合
-        if self.train:
-            return sat_map, grd_left_imgs[0], gt, gt_with_ori, orientation_map, orientation_angle
-        else:
-            return sat_map, grd_left_imgs[0], gt, gt_with_ori, orientation_map, orientation_angle, city
-
-
 city_dict = {
     'CHG':'Chicago',
     'SD':'Sydney',
@@ -504,38 +324,7 @@ class DictToAttributes:
 class NullHypothesis:
     def  __init__(self, pro_dir):
         self.pro_dir = pro_dir
-        self.param_txt = 'norm_param.txt'
-        self.param_txt3 = 'pdf_theta.txt'
-        self.param_dict = self.load_param()
         self.param_dict2 = self.load_param2()
-        # self.param_dict3 = self.load_param3()
-
-    # 使用概率密度列表计算概率
-    def probability3(self, x):
-        pdf, step = self.param_dict3.pdf, self.param_dict3.step
-        ind = int(round(x // step))
-        d = x % step
-        if x >= 180.:
-            return 1
-        if ind > 0:
-            p0 = pdf[ind-1]
-            y = pdf[ind] - pdf[ind-1]
-        else:
-            p0 = 0
-            y = pdf[ind]
-        return p0 + y*d
-
-    # 加载概率密度列表
-    def load_param3(self):
-        txt_path = osp.join(self.pro_dir, self.param_txt3)
-        pdf_mat = np.loadtxt(txt_path)
-        step = 180 / len(pdf_mat)
-        temp_dict = {
-            'pdf':pdf_mat,
-            'step':step
-
-        }
-        return DictToAttributes(**temp_dict)
 
     # 使用两段直线的概率参数
     def load_param2(self):
@@ -569,34 +358,6 @@ class NullHypothesis:
         else:
             return 1
 
-    def load_param(self):
-        txt_path = osp.join(self.pro_dir, self.param_txt)
-        data_mat = np.loadtxt(txt_path)
-        mu, sigma, xr, xl = data_mat
-        pdf0 = norm.pdf(xr, mu, sigma)
-        cdf0 = norm.cdf(xr, mu, sigma)
-        a0 = pdf0*xr+1-cdf0
-        temp_dict = {
-            'mu':mu,
-            'sigma':sigma,
-            'xr':xr,
-            'xl':xl,
-            'pdf0':pdf0,
-            'cdf0':cdf0,
-            'a0':a0
-        }
-        return DictToAttributes(**temp_dict)
-
-    def probability(self, x):
-        p = self.param_dict
-        mu, sig, xr, pdf0, cdf0, a0 = \
-            p.mu, p.sigma, p.xr, p.pdf0, p.cdf0, p.a0
-
-        if x < xr:
-            return x*pdf0/a0
-        else:
-            return (xr*pdf0+norm.cdf(x, mu, sig)-cdf0)/a0
-
 # 用于定位一整张图像
 class SkyMapLocation(Dataset):
     def __init__(self, root, pro_dir,
@@ -610,6 +371,9 @@ class SkyMapLocation(Dataset):
         if transform != None:
             self.satmap_transform = transform[0]
             self.grdimage_transform = transform[1]
+        else:
+            self.satmap_transform = satmap_transform
+            self.grdimage_transform = grdimage_transform
 
         self.pro_grdimage_dir = 'raw_data'
         self.slice_flag = 'slice'
@@ -812,12 +576,13 @@ class PoseEstimation(Dataset):
 
 # ReliableLoc类，使用模型输出的结果进行可信定位与结果保存
 class ReliableLoc():
-    def __init__(self, root, pro_dir, pose_dir,
+    def __init__(self, root, pro_dir, pose_dir, nfa_thr=0.,
                  rotation_range=10, sat_resize=512, cross_area=True, city_list=None):
         self.root = root
         self.pro_root = pro_dir
         self.pose_dir = pose_dir
 
+        self.nfa_thr = nfa_thr
         self.rotation_range = rotation_range  # in terms of degree
         self.shift_range_pixel = 160 # in terms of pixels
         self.sat_resize = sat_resize
@@ -951,7 +716,7 @@ class ReliableLoc():
             else:
                 city_result[city].append(res_data)
 
-            if nfa < 0:
+            if nfa < self.nfa_thr:
                 loc_err2_.append(loc_err2)
             loc_err_.append(loc_err2)
 
@@ -1778,10 +1543,21 @@ def loc_camera(file):
     slice_num = pose_mat.shape[0]
     prd_locs = pose_mat[:, :2]
     if pose_mat.shape[1] > 2:
-        slice_oris = pose_mat[:, 2]  # 角度为与正北方向的顺时针夹角值
+        pd_oris = pose_mat[:, 2:]  # 角度为与正北方向的顺时针夹角值
+        slice_oris = []
+        for batch_idx in range(pd_oris.shape[0]):
+            # 记录角度的预测值
+            cos_pred, sin_pred = pd_oris[batch_idx]
+            if np.abs(cos_pred) <= 1 and np.abs(sin_pred) <= 1:
+                a_acos_pred = math.acos(cos_pred)
+                if sin_pred < 0:
+                    angle_pred = math.degrees(-a_acos_pred) % 360
+                else:
+                    angle_pred = math.degrees(a_acos_pred)
+            slice_oris.append(angle_pred)
+        slice_oris = np.array(slice_oris)
     else:
         slice_oris = 90 * np.ones((pose_mat.shape[0], 1))
-    prd_ori = np.mean(slice_oris) - 90
     slice_locs = []
     for batch_idx in range(slice_num):
         heading = batch_idx * 360 / slice_num

@@ -1,11 +1,10 @@
 # Slice-Loc
-The source code is currently undergoing patent review and will be updated upon receiving approval.
 ![](figures/Fig1.jpg)
 ![](figures/Fig9.jpg)
 
 ## ✅ To-Do
 
-- [ ] Initial repo structure
+- [x] Initial repo structure
 - [ ] DReSS-D Dataset
 - [ ] Training scripts
 - [ ] Testing scripts
@@ -18,4 +17,8 @@ Building on DReSS, the DReSS-D dataset is provided,which includes ground and aer
 
 ### 2.1 DReSS Dataset
 DReSS: [Baidu Netdisk](https://pan.baidu.com/s/1m3VLsyX3mIl1DmK_X6v4Lw?pwd=MAgs), [Huggingface part-1](https://huggingface.co/datasets/SummerpanKing/DReSS-part1), [Huggingface-part2](https://huggingface.co/datasets/Mabel0403/DReSS-part2).
+
+## Acknowledgments
+
+This code is based on the amazing work of: [CCVPE](https://github.com/tudelft-iv/CCVPE), [HC-Net](https://github.com/xlwangDev/HC-Net) and [AuxGeo](https://github.com/SummerpanKing/DReSS). We appreciate the previous open-source works.
 
