@@ -507,19 +507,18 @@ def generate_slice_data(argv):
 
     parser.add_argument('--data_root', type=str, default=r'/media/xmt/563A16213A15FEA5/XMT/Datas/SkyMap',
                         help='path to the root folder of all dataset')
-    parser.add_argument('--pro_dir', type=str, default=r'/media/xmt/563A16213A15FEA5/XMT/Datas/test_gen_slice_data',
+    parser.add_argument('--pro_root', type=str, default=r'/media/xmt/563A16213A15FEA5/XMT/Datas/test_gen_slice_data',
                         help='path to the root folder of all processed sliced image')
     parser.add_argument('--slice_num', default=12, type=int, help='the number of sliced image')
     parser.add_argument('--ori_range', default=45, type=int, help='the range of orientation noise')
 
     args = vars(parser.parse_args())
     data_root = args['data_root']
-    pro_dir = args['pro_dir']
+    pro_dir = args['pro_root']
     slice_num = args['slice_num']
     ori_range = args['ori_range']
 
-    # citys = ['Chicago', 'Sydney', 'Johannesburg', 'Tokyo', 'Rio', 'London']
-    citys = ['Chicago']
+    citys = ['Chicago', 'Sydney', 'Johannesburg', 'Tokyo', 'Rio', 'London']
 
     random.seed(100)
     slice_flag = 'slice'

@@ -53,7 +53,6 @@ if cross_area:
 else:
     dir_label += 'same_'
 dir_label += str(rotation_range)
-# dir_label = 'slice_cross_pseudo'
 save_dir = osp.join(ExpRes_dir, dir_label)
 
 city_list = None

@@ -120,27 +120,6 @@ for i, data in tqdm(enumerate(location_loader, 0)):
     with torch.no_grad():
         _, heatmap, ori, _, _, _, _, _, _ = CVM_model(grd, sat)
 
-
-    # heatmap = heatmap.detach().cpu().numpy()
-    # ori = ori.detach().cpu().numpy()
-    # B, C, H, W = heatmap.shape
-    # # 展平空间维度
-    # flat_idx = heatmap.reshape(B, -1).argmax(axis=1)
-    # # 转回 (c, y, x)
-    # c_idx, y, x = np.unravel_index(flat_idx, (C, H, W))
-    # cos_pred = ori[np.arange(B), 0, y, x]
-    # sin_pred = ori[np.arange(B), 1, y, x]
-    # angles = np.degrees(np.arctan2(sin_pred, cos_pred)) % 360
-    # prd_locs = np.stack([x, y], axis=1)  # [B,2]
-    # pose_mat = np.column_stack([prd_locs, angles])  # [B,3]
-    #
-    # pose_dir = osp.join(save_dir, city, pose_file)
-    # os.makedirs(pose_dir, exist_ok=True)
-    #
-    # mat_path = osp.join(pose_dir, pano_flag + '.npy')
-    # np.save(mat_path, pose_mat)
-
-    # =========================================================
     pd_loc = loc_heatmap(heatmap.squeeze(1))
     pd_ori = ori[torch.arange(pd_loc.size(0)), :, pd_loc[:,1], pd_loc[:,0]]
     pose_mat = np.column_stack([pd_loc.cpu().numpy(), pd_ori.cpu().numpy()])
@@ -149,30 +128,3 @@ for i, data in tqdm(enumerate(location_loader, 0)):
         os.makedirs(pose_dir)
     mat_path = osp.join(pose_dir, pano_flag + '.npy') # x, y, ori
     np.save(mat_path, pose_mat)
-
-    # heatmap = heatmap.cpu().detach().numpy()
-    # ori = ori.cpu().detach().numpy()
-    # prd_locs = []
-    # slice_oris = []
-    #
-    # for batch_idx in range(sat.shape[0]):
-    #     current_pred = heatmap[batch_idx, :, :, :]
-    #     _, y, x = np.unravel_index(current_pred.argmax(), current_pred.shape)  # 选取热力图中最大值，作为预测的坐标所在
-    #
-    #     # 记录角度的预测值
-    #     cos_pred, sin_pred = ori[batch_idx, :, y, x]
-    #     if np.abs(cos_pred) <= 1 and np.abs(sin_pred) <= 1:
-    #         a_acos_pred = math.acos(cos_pred)
-    #         if sin_pred < 0:
-    #             angle_pred = math.degrees(-a_acos_pred) % 360
-    #         else:
-    #             angle_pred = math.degrees(a_acos_pred)
-    #     slice_oris.append(angle_pred)
-    #     prd_locs.append([x, y])
-    # slice_oris = np.array(slice_oris) # 角度为与正北方向的顺时针夹角值
-    # pose_mat = np.column_stack([prd_locs, slice_oris])
-    # pose_dir = osp.join(save_dir, city, pose_file)
-    # if not osp.exists(pose_dir):
-    #     os.makedirs(pose_dir)
-    # mat_path = osp.join(pose_dir, pano_flag + '.npy') # x, y, ori
-    # np.save(mat_path, pose_mat)
