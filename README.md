@@ -21,7 +21,7 @@ Building on DReSS, the DReSS-D dataset is provided, which includes ground and ae
 ### 2.1 DReSS Dataset
 DReSS: [Baidu Netdisk](https://pan.baidu.com/s/1m3VLsyX3mIl1DmK_X6v4Lw?pwd=MAgs), [Huggingface part-1](https://huggingface.co/datasets/SummerpanKing/DReSS-part1), [Huggingface-part2](https://huggingface.co/datasets/Mabel0403/DReSS-part2).
 
-### 2.2 DReSS-Dataset
+### 2.2 DReSS-D Dataset
 DReSS-D: [Baidu Netdisk](https://pan.baidu.com/s/1NmZYHup5hUE4FE6qXoNAhA?pwd=g2ms).
 
 Please prepare the data as follows:
@@ -66,6 +66,9 @@ Set up a output folder to save the result.
 ## Acknowledgments
 
 This code is based on the amazing work of: [CCVPE](https://github.com/tudelft-iv/CCVPE), [HC-Net](https://github.com/xlwangDev/HC-Net) and [AuxGeo](https://github.com/SummerpanKing/DReSS). We appreciate the previous open-source works.
+
+## Statement
+For any other questions please contact Mingtao Xiong [xiongmingtao@whu.edu.cn]
 
 ## Citation
 If you find this work useful, please cite:
