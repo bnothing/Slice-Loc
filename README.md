@@ -74,12 +74,14 @@ For any other questions please contact Mingtao Xiong [xiongmingtao@whu.edu.cn]
 If you find this work useful, please cite:
 
 ```bibtex
-@misc{zhang2025crossviewlocalizationredundantsliced,
-      title={Cross-View Localization via Redundant Sliced Observations and A-Contrario Validation}, 
-      author={Yongjun Zhang and Mingtao Xiong and Yi Wan and Gui-Song Xia},
-      year={2025},
-      eprint={2508.05369},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={ https://arxiv.org/abs/2508.05369 }, 
+@article{ZHANG2026421,
+	title = {Cross-view localization via redundant sliced observations and a-contrario validation},
+	journal = {ISPRS Journal of Photogrammetry and Remote Sensing},
+	volume = {236},
+	pages = {421-437},
+	year = {2026},
+	issn = {0924-2716},
+	doi = {https://doi.org/10.1016/j.isprsjprs.2026.04.014},
+	url = {https://www.sciencedirect.com/science/article/pii/S0924271626001863},
+	author = {Yongjun Zhang and Mingtao Xiong and Yi Wan and Gui-Song Xia},
 }
